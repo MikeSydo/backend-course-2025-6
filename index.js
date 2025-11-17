@@ -4,6 +4,8 @@ const express = require('express');
 const app = express();
 const path = require('path');
 const multer = require('multer');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');    
 
 program
     .requiredOption('-h, --host <host>')
@@ -48,13 +50,52 @@ async function writeInventory(data) {
     await fs.promises.writeFile(inventoryFile, JSON.stringify(data, null, 2));
 }
 
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Inventory API',  
+      version: '1.0.0',
+    },
+    servers: [{ url: `http://${options.host}:${options.port}` }],
+  },
+  apis: ['./index.js'] 
+};
+const swaggerSpecs = swaggerJsdoc(swaggerOptions);
+
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 app.use('/photos', express.static(path.join(options.cache, 'uploads')));
 app.use(express.static('public'));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 let nextId = 1;
 
+/**
+ * @swagger
+ * /register:
+ *   post:
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - inventory_name
+ *             properties:
+ *               inventory_name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *               photo:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       201:
+ *         description: Пристрій зареєстровано
+ *       400:
+ *         description: Помилка валідації
+ */
 app.post('/register', upload.single('photo'), async (req, res) => {
     const { inventory_name, description } = req.body;
     if (!inventory_name) return res.status(400).send('Name is required');
@@ -75,11 +116,35 @@ app.post('/register', upload.single('photo'), async (req, res) => {
     res.status(201).json(item);
 });
 
+/**
+ * @swagger
+ * /inventory:
+ *   get:
+ *     responses:
+ *       200:
+ *         description: Список речей
+ */
 app.get('/inventory', async (req, res) => {
     const list = await readInventory();
     res.status(200).json(list);
 });
 
+/**
+ * @swagger
+ * /inventory/{id}:
+ *   get:   
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Item details
+ *       404:
+ *         description: Item not found
+ */
 app.get('/inventory/:id', async (req, res) => {
     const id = parseInt(req.params.id);
     const list = await readInventory();
@@ -92,6 +157,32 @@ app.get('/inventory/:id', async (req, res) => {
     res.status(200).json(item);
 });
 
+/**
+ * @swagger
+ * /inventory/{id}:
+ *   put:
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               inventory_name:
+ *                 type: string
+ *               description:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Item updated
+ *       404:
+ *         description: Item not found
+ */
 app.put('/inventory/:id', async (req, res) => {
     const id = parseInt(req.params.id);
     
@@ -116,6 +207,22 @@ app.put('/inventory/:id', async (req, res) => {
     res.status(200).json(item);
 });
 
+/**
+ * @swagger
+ * /inventory/{id}/photo:
+ *   get:
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Photo file
+ *       404:
+ *         description: Photo not found
+ */
 app.get('/inventory/:id/photo', async (req, res) => {
     const id = parseInt(req.params.id); 
 
@@ -137,6 +244,33 @@ app.get('/inventory/:id/photo', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /inventory/{id}/photo:
+ *   put:
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - photo
+ *             properties:
+ *               photo:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Photo updated
+ *       404:
+ *         description: Photo not found
+ */
 app.put('/inventory/:id/photo', upload.single('photo'), async (req, res) => {
     try {
         const id = parseInt(req.params.id);
@@ -164,6 +298,22 @@ app.put('/inventory/:id/photo', upload.single('photo'), async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /inventory/{id}:
+ *   delete:
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Item deleted
+ *       404:
+ *         description: Item not found
+ */
 app.delete('/inventory/:id', async (req, res) => {
     const id = parseInt(req.params.id);
     const list = await readInventory();
@@ -198,6 +348,28 @@ app.get('/SearchForm.html', (req, res) => {
     res.sendFile(path.join(path.resolve(), 'src', 'SearchForm.html'));
 });
 
+/**
+ * @swagger
+ * /search:
+ *   post:
+ *     requestBody:
+ *       content:
+ *         application/x-www-form-urlencoded:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - id
+ *             properties:
+ *               id:
+ *                 type: integer
+ *               has_photo:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Item found
+ *       404:
+ *         description: Item not found
+ */
 app.post('/search', async (req, res) => {
     const id = parseInt(req.body.id);
     const hasPhoto = req.body.has_photo === 'on';
