@@ -33,14 +33,6 @@ async function ensureInventoryFile() {
     }
 }
 
-async function ensureInventoryFile() {
-    try {
-        await fs.promises.access(inventoryFile);
-    } catch {
-        await fs.promises.writeFile(inventoryFile, JSON.stringify([]));
-    }
-}
-
 async function readInventory() {
     const data = await fs.promises.readFile(inventoryFile, 'utf8');
     return JSON.parse(data);
