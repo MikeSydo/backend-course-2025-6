@@ -24,7 +24,6 @@ async function ensureCacheDir() {
         await fs.promises.mkdir(options.cache, { recursive: true });
     }
 }
-
 async function ensureInventoryFile() {
     try {
         await fs.promises.access(inventoryFile);
@@ -32,14 +31,11 @@ async function ensureInventoryFile() {
         await fs.promises.writeFile(inventoryFile, JSON.stringify([]));
     }
 }
-
-async function readInventory() {
-    const data = await fs.promises.readFile(inventoryFile, 'utf8');
-    return JSON.parse(data);
+async function readInventory() { 
+    return JSON.parse(await fs.promises.readFile(inventoryFile, 'utf8')); 
 }
-
-async function writeInventory(data) {
-    await fs.promises.writeFile(inventoryFile, JSON.stringify(data, null, 2));
+async function writeInventory(data) { 
+    await fs.promises.writeFile(inventoryFile, JSON.stringify(data, null, 2)); 
 }
 
 const swaggerOptions = {
@@ -53,13 +49,10 @@ const swaggerOptions = {
   },
   apis: ['./index.js'] 
 };
-const swaggerSpecs = swaggerJsdoc(swaggerOptions);
 
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
-app.use('/photos', express.static(path.join(options.cache, 'uploads')));
-app.use(express.static('public'));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerJsdoc(swaggerOptions)));
 
 let nextId = 1;
 
@@ -84,16 +77,16 @@ let nextId = 1;
  *                 format: binary
  *     responses:
  *       201:
- *         description: Пристрій зареєстровано
+ *         description: item registered
  *       400:
- *         description: Помилка валідації
+ *         description: error validation
  */
 app.post('/register', upload.single('photo'), async (req, res) => {
     const { inventory_name, description } = req.body;
     if (!inventory_name) return res.status(400).send('Name is required');
 
     const id = nextId++;
-    const photoPath = req.file ? `/photos/${req.file.filename}` : null;
+    const photoPath = req.file ? req.file.filename : null;
     const item = { 
         id: id, 
         inventory_name: inventory_name, 
@@ -114,12 +107,9 @@ app.post('/register', upload.single('photo'), async (req, res) => {
  *   get:
  *     responses:
  *       200:
- *         description: Список речей
+ *         description: items list
  */
-app.get('/inventory', async (req, res) => {
-    const list = await readInventory();
-    res.status(200).json(list);
-});
+app.get('/inventory', async (req, res) => { res.status(200).json(await readInventory()); });
 
 /**
  * @swagger
@@ -142,10 +132,7 @@ app.get('/inventory/:id', async (req, res) => {
     const list = await readInventory();
     const item = list.find(i => i.id === id);
     
-    if (!item) {
-        return res.status(404).json({ error: 'Item not found' });
-    }
-    
+    if (!item) return res.status(404).json({ error: 'Item not found' });
     res.status(200).json(item);
 });
 
@@ -177,25 +164,16 @@ app.get('/inventory/:id', async (req, res) => {
  */
 app.put('/inventory/:id', async (req, res) => {
     const id = parseInt(req.params.id);
-    
     const list = await readInventory();
     const item = list.find(i => i.id === id);
     
-    if (!item) {
-        return res.status(404).json({ error: 'Item not found' });
-    }
-
-    const { inventory_name, description } = req.body;
+    if (!item) return res.status(404).json({ error: 'Item not found' });
     
-    if (inventory_name !== undefined) {
-        item.inventory_name = inventory_name;
-    }
-    if (description !== undefined) {
-        item.description = description;
-    }
+    const { inventory_name, description } = req.body;
+    if (inventory_name) item.inventory_name = inventory_name;
+    if (description) item.description = description;
     
     await writeInventory(list);
-    
     res.status(200).json(item);
 });
 
@@ -217,13 +195,10 @@ app.put('/inventory/:id', async (req, res) => {
  */
 app.get('/inventory/:id/photo', async (req, res) => {
     const id = parseInt(req.params.id); 
-
     const list = await readInventory();
     const item = list.find(i => i.id === id);
 
-    if (!item || !item.photo) {
-        return res.status(404).json({ error: 'Photo not found' });
-    }
+    if (!item || !item.photo) return res.status(404).json({ error: 'Photo not found' });
 
     const photoPath = path.resolve(options.cache, 'uploads', path.basename(item.photo));
 
@@ -269,21 +244,12 @@ app.put('/inventory/:id/photo', upload.single('photo'), async (req, res) => {
         const list = await readInventory();
         const item = list.find(i => i.id === id);
         
-        if (!item) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-        if (!req.file) {
-            return res.status(400).json({ error: 'Photo is required' });
-        }
-        if (item.photo) {
-            const oldPhotoPath = path.join(options.cache, 'uploads', path.basename(item.photo));
-            await fs.promises.unlink(oldPhotoPath);
-        }
+        if (!item) return res.status(404).json({ error: 'Item not found' });
+        if (!req.file) return res.status(400).json({ error: 'Photo is required' });
+        if (item.photo) await fs.promises.unlink(path.join(options.cache, 'uploads', item.photo));
         
-        item.photo = `/uploads/${req.file.filename}`;
+        item.photo = req.file.filename;
         await writeInventory(list);
-        
-        
         res.status(200).json({ message: 'Photo updated successfully' });
     } catch (error) {
         res.status(500).json({ error: 'Error updating photo' });
@@ -311,14 +277,12 @@ app.delete('/inventory/:id', async (req, res) => {
     const list = await readInventory();
     const itemIndex = list.findIndex(i => i.id === id);
     
-    if (itemIndex === -1) {
-        return res.status(404).json({ error: 'Item not found' });
-    }
+    if (itemIndex === -1) return res.status(404).json({ error: 'Item not found' });
     
     const item = list[itemIndex];
     
     if (item.photo) {
-        const photoPath = path.join(options.cache, 'uploads', path.basename(item.photo));
+        const photoPath = path.join(options.cache, 'uploads', item.photo);
         try {
             await fs.promises.unlink(photoPath);
         } catch (err) {
@@ -332,13 +296,8 @@ app.delete('/inventory/:id', async (req, res) => {
     res.status(200).json({ message: 'Item deleted successfully' });
 });
 
-app.get('/RegisterForm.html', (req, res) => {
-    res.sendFile(path.join(path.resolve(), 'src', 'RegisterForm.html'));
-});
-
-app.get('/SearchForm.html', (req, res) => {
-    res.sendFile(path.join(path.resolve(), 'src', 'SearchForm.html'));
-});
+app.get('/RegisterForm.html', (req, res) => { res.sendFile(path.join(path.resolve(), 'src', 'RegisterForm.html')); });
+app.get('/SearchForm.html', (req, res) => { res.sendFile(path.join(path.resolve(), 'src', 'SearchForm.html')); });
 
 /**
  * @swagger
@@ -368,9 +327,7 @@ app.post('/search', async (req, res) => {
     const list = await readInventory();
     const item = list.find(i => i.id === id);
     
-    if (!item) {
-        return res.status(404).json({ error: 'Item not found' });
-    }
+    if (!item) return res.status(404).json({ error: 'Item not found' });
     
     let description = item.description;
     if (hasPhoto && item.photo) {
@@ -385,9 +342,7 @@ app.post('/search', async (req, res) => {
     });
 });
 
-app.use((req, res) => {
-    res.status(405).json({ error: 'Method not allowed' });
-});
+app.use((req, res) => { res.status(405).json({ error: 'Method not allowed' }); });
 
 (async () => {
     await ensureCacheDir();
