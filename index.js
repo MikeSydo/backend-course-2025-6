@@ -85,19 +85,16 @@ app.post('/register', upload.single('photo'), async (req, res) => {
     const { inventory_name, description } = req.body;
     if (!inventory_name) return res.status(400).send('Name is required');
 
-    const id = nextId++;
-    const photoPath = req.file ? req.file.filename : null;
     const item = { 
-        id: id, 
+        id: nextId++, 
         inventory_name: inventory_name, 
         description: description || '', 
-        photo: photoPath
+        photo: req.file ? req.file.filename : null,
     };
 
     const list = await readInventory();
     list.push(item);
     await writeInventory(list);
-
     res.status(201).json(item);
 });
 
@@ -135,7 +132,6 @@ app.get('/inventory/:id', async (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item not found' });
     res.status(200).json(item);
 });
-
 /**
  * @swagger
  * /inventory/{id}:
@@ -176,7 +172,6 @@ app.put('/inventory/:id', async (req, res) => {
     await writeInventory(list);
     res.status(200).json(item);
 });
-
 /**
  * @swagger
  * /inventory/{id}/photo:
@@ -197,7 +192,6 @@ app.get('/inventory/:id/photo', async (req, res) => {
     const id = parseInt(req.params.id); 
     const list = await readInventory();
     const item = list.find(i => i.id === id);
-
     if (!item || !item.photo) return res.status(404).json({ error: 'Photo not found' });
 
     const photoPath = path.resolve(options.cache, 'uploads', path.basename(item.photo));
@@ -210,7 +204,6 @@ app.get('/inventory/:id/photo', async (req, res) => {
         res.status(404).json({ error: 'Photo file not found' });
     }
 });
-
 /**
  * @swagger
  * /inventory/{id}/photo:
@@ -255,7 +248,6 @@ app.put('/inventory/:id/photo', upload.single('photo'), async (req, res) => {
         res.status(500).json({ error: 'Error updating photo' });
     }
 });
-
 /**
  * @swagger
  * /inventory/{id}:
@@ -298,7 +290,6 @@ app.delete('/inventory/:id', async (req, res) => {
 
 app.get('/RegisterForm.html', (req, res) => { res.sendFile(path.join(path.resolve(), 'src', 'RegisterForm.html')); });
 app.get('/SearchForm.html', (req, res) => { res.sendFile(path.join(path.resolve(), 'src', 'SearchForm.html')); });
-
 /**
  * @swagger
  * /search:
