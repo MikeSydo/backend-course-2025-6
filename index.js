@@ -314,14 +314,14 @@ app.get('/SearchForm.html', (req, res) => { res.sendFile(path.join(path.resolve(
  */
 app.post('/search', async (req, res) => {
     const id = parseInt(req.body.id);
-    const hasPhoto = req.body.has_photo === 'on';
+    const includePhoto = req.body.includePhoto === 'on';
     const list = await readInventory();
     const item = list.find(i => i.id === id);
     
     if (!item) return res.status(404).json({ error: 'Item not found' });
     
     let description = item.description;
-    if (hasPhoto && item.photo) {
+    if (includePhoto && item.photo) {
         description += ` Photo: ${item.photo}`;
     }
     
